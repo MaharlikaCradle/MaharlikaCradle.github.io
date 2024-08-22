@@ -1,0 +1,90 @@
+<?php
+// Start session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Redirect to login page if user is not logged in
+if (!isset($_SESSION['email'])) {
+    header("Location: login.html");
+    exit; // Ensure that script execution stops after redirect
+}
+
+// Database connection
+$conn = new mysqli('localhost', 'root', '', 'maharlikascradledb');
+
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+// Validate and sanitize input data
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Initialize variables to store form data
+    $email = $_SESSION['email']; // Assuming email is stored in session
+
+    $names = htmlspecialchars($_POST['names']);
+    $chosenrooms = htmlspecialchars($_POST['chosenrooms']);
+    $check_in_date = htmlspecialchars($_POST['check_in_date']);
+    $check_out_date = htmlspecialchars($_POST['check_out_date']);
+    $emailB = htmlspecialchars($_POST['emailB']);
+    $phone = htmlspecialchars($_POST['phone']);
+    $country = htmlspecialchars($_POST['country']);
+    $special_request = htmlspecialchars($_POST['special_request']);
+    $arrival_time = htmlspecialchars($_POST['arrival_time']);
+    $bookingFor = htmlspecialchars($_POST['bookingFor']);
+    $travelingForWork = htmlspecialchars($_POST['travelingForWork']);
+
+    // Check if room is available for the selected dates
+    $sql_check_availability = "SELECT * FROM bookings 
+                               WHERE chosenrooms = ? 
+                               AND (
+                                   (check_in_date < ? AND check_out_date > ?) 
+                                   OR (check_in_date >= ? AND check_out_date <= ?)
+                               )";
+    $stmt_check = $conn->prepare($sql_check_availability);
+
+    if (!$stmt_check) {
+        echo "Error preparing statement: " . $conn->error;
+        exit();
+    }
+
+    // Bind parameters and execute SQL query
+    $stmt_check->bind_param("issss", $chosenrooms, $check_out_date, $check_in_date, $check_in_date, $check_out_date);
+    $stmt_check->execute();
+    $result = $stmt_check->get_result();
+
+    // Check if any overlapping bookings found
+    if ($result->num_rows > 0) {
+        // Room is not available for the selected dates
+        echo 'not_available';
+        exit();
+    }
+
+    $stmt_check->close();
+
+    // Prepare and bind SQL statement for inserting booking
+    $sql_insert = "INSERT INTO bookings (email, chosenrooms, check_in_date, check_out_date, names, emailB, phone, country, special_request, arrival_time, bookingFor, travelingForWork) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    $stmt_insert = $conn->prepare($sql_insert);
+
+    if (!$stmt_insert) {
+        echo "Error preparing statement: " . $conn->error;
+        exit();
+    }
+
+    // Bind parameters
+    $stmt_insert->bind_param("ssssssssssss", $email, $chosenrooms, $check_in_date, $check_out_date, $names, $emailB, $phone, $country, $special_request, $arrival_time, $bookingFor, $travelingForWork);
+
+    // Execute the statement
+    if ($stmt_insert->execute()) {
+        echo 'available';
+    } else {
+        echo "Error: " . $stmt_insert->error;
+    }
+
+    $stmt_insert->close();
+}
+
+// Close connection
+$conn->close();
+?>

@@ -1,0 +1,53 @@
+<?php
+session_start();
+// Database connection
+$conn = new mysqli('localhost', 'root', '', 'maharlikascradledb');
+
+if ($conn->connect_error) {
+    echo "Connection failed: " . $conn->connect_error;
+}
+
+// User registration
+function registerUser($fullName, $email, $password, $dateOfBirth, $validIdPicture) {
+    global $conn;
+
+    // Check if email already exists
+    $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows > 0) {
+        return "Email already registered";
+    }
+
+    // Hash password
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+
+    // File upload handling
+    $validIdPicturePath = 'validID/' . basename($_FILES['validIdPicture']['name']);
+    if (move_uploaded_file($_FILES['validIdPicture']['tmp_name'], $validIdPicturePath)) {
+        // Insert new user with file path
+        $stmt = $conn->prepare("INSERT INTO users (fullName, email, passwordHash, dateOfBirth, validIdPicture) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssss", $fullName, $email, $passwordHash, $dateOfBirth, $validIdPicturePath);
+        if ($stmt->execute()) {
+            $_SESSION['email'] = $email;
+            header("Location: emailOTP.php");
+        } else {
+            return "Error during registration: " . $stmt->error;
+        }
+    } else {
+        return "Error moving file";
+    }
+}
+
+// Example usage:
+$fullName = $_POST['fullName'];
+$email = $_POST['email'];
+$password = $_POST['password'];
+$dateOfBirth = $_POST['dateOfBirth'];
+$validIdPicture = $_FILES['validIdPicture']['tmp_name']; // Adjust this based on your form field name
+
+echo registerUser($fullName, $email, $password, $dateOfBirth, $validIdPicture);
+
+?>
